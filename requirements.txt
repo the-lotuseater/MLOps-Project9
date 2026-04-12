@@ -1,0 +1,44 @@
+# --- Core ML & Deep Learning (Version Locked) ---
+tensorflow==2.12.0
+keras==2.12.0
+numpy==1.23.5
+pandas==1.5.3
+scikit-learn==1.2.2
+mlflow==2.3.2
+protobuf==3.20.3
+tensorboard==2.12.3
+
+# --- Optimization & Experiment Tracking ---
+hyperopt==0.2.7
+dvc
+dagshub
+dvc-s3
+python-dotenv==1.2.1
+
+# --- Database & Connectivity ---
+pymongo==4.6.1
+dnspython
+certifi==2024.12.14
+
+# --- Visualization & Notebooks ---
+matplotlib
+notebook
+tqdm
+
+# --- Utilities & Configuration ---
+python-box
+pyYAML
+types-PyYAML
+ensure
+joblib
+
+# --- Web & API ---
+Flask
+Flask-Cors
+fastapi
+uvicorn
+python-multipart
+
+dill
+pyaml
+-e .
