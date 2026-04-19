@@ -1,0 +1,92 @@
+name: workflow
+
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+  
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  CI:
+    name: Continuous Integration
+    runs-on: ubuntu-latest
+    outputs: 
+      image_tag: ${{ steps.shortsha.sha_short}}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+    
+      - name: Set Short SHA
+        id: shortsha
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+    
+      - name: Install Utilities
+        run: | 
+          sudo apt-get update
+          sudo apt-get install -y jp unzip
+      - name: Configure AWS Creds
+        uses: aws-actions/configure-aws-credentials@v1
+        with: 
+          aws-access-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login To AWS ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag and push to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets. ECR_REPOSITORY_NAME }}
+          IMAGE_TAG: ${{ steps.shortsha.sha_short}}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+  CD:
+    name: Continuous Delivery
+    needs: CI
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/github@v3
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with: 
+          aws-access-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to AWS ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Pull latest image
+        env: 
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: $${{ secrets. ECR_REPOSITORY_NAME }}
+          IMAGE_TAG: ${{ needs.CI.outputs.image_tag}}
+        run: | 
+          docker pull image:$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Run Docker Image to server users
+        env:
+          IMAGE_TAG: ${{ needs.CI.outputs.image_tag}}
+        run: 
+          docker run -d -p 8080:8080 --ipc="host" --name=mltest -e 'AWS_ACCESS_KEY'=${{ secrets.AWS_ACCESS_KEY_ID }} 'AWS_REGION'=${{ secrets.AWS_REGION }} ${{secrets.AWS_ECR_LOGIN_URI}}/${{secrets.ECR_REPOSITORY_NAME}}:$IMAGE_TAG
+
+      - name: Clean previous images and containers
+        run: |
+          docker system prune -f
+
+        
